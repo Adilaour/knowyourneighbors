@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS people (
   email      TEXT,
   notes      TEXT,
   moved_in   TEXT,
+  photo_filename TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { usePeople } from '../api/people'
 import { useHouses } from '../api/houses'
+import Avatar from '../components/contacts/Avatar'
 
 export default function ListPage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -52,10 +53,13 @@ export default function ListPage() {
                   className={`contact-list__item ${p.id === selectedPersonId ? 'is-selected' : ''}`}
                   onClick={() => selectPerson(p.id)}
                 >
-                  <span className="contact-list__name">
-                    {p.first_name} {p.last_name}
+                  <Avatar person={p} />
+                  <span className="contact-list__text">
+                    <span className="contact-list__name">
+                      {p.first_name} {p.last_name}
+                    </span>
+                    <span className="muted">{house ? house.name : 'nicht zugeordnet'}</span>
                   </span>
-                  <span className="muted">{house ? house.name : 'nicht zugeordnet'}</span>
                 </button>
               </li>
             )
@@ -67,6 +71,7 @@ export default function ListPage() {
         {!selectedPerson && <p className="hint">Wähle einen Kontakt aus der Liste.</p>}
         {selectedPerson && (
           <div>
+            <Avatar person={selectedPerson} size="large" />
             <h2>
               {selectedPerson.first_name} {selectedPerson.last_name}
             </h2>

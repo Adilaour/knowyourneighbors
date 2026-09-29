@@ -1,8 +1,16 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { usePerson, useCreatePerson, useUpdatePerson } from '../../api/people'
+import {
+  usePerson,
+  useCreatePerson,
+  useUpdatePerson,
+  useUploadPersonPhoto,
+  useDeletePersonPhoto,
+} from '../../api/people'
 import { useHouses } from '../../api/houses'
+import { personPhotoUrl } from '../../api/types'
 import type { PersonInput } from '../../api/types'
+import Avatar from '../contacts/Avatar'
 
 const emptyForm: PersonInput = {
   house_id: null,
@@ -23,8 +31,12 @@ export default function ContactForm() {
   const { data: houses = [] } = useHouses()
   const createPerson = useCreatePerson()
   const updatePerson = useUpdatePerson()
+  const uploadPhoto = useUploadPersonPhoto()
+  const deletePhoto = useDeletePersonPhoto()
 
   const [form, setForm] = useState<PersonInput>(emptyForm)
+  const [photoFile, setPhotoFile] = useState<File | null>(null)
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null)
 
   useEffect(() => {
     if (person) {
@@ -40,26 +52,74 @@ export default function ContactForm() {
     }
   }, [person])
 
+  useEffect(() => {
+    if (!photoFile) {
+      setPhotoPreview(null)
+      return
+    }
+    const url = URL.createObjectURL(photoFile)
+    setPhotoPreview(url)
+    return () => URL.revokeObjectURL(url)
+  }, [photoFile])
+
   function handleChange<K extends keyof PersonInput>(key: K, value: PersonInput[K]) {
     setForm((f) => ({ ...f, [key]: value }))
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    let personId: number
     if (isEdit) {
-      await updatePerson.mutateAsync({ id: Number(id), input: form })
+      personId = Number(id)
+      await updatePerson.mutateAsync({ id: personId, input: form })
     } else {
-      await createPerson.mutateAsync(form)
+      const created = await createPerson.mutateAsync(form)
+      personId = created.id
+    }
+    if (photoFile) {
+      await uploadPhoto.mutateAsync({ id: personId, file: photoFile })
     }
     navigate('/admin/contacts')
   }
 
-  const saving = createPerson.isPending || updatePerson.isPending
+  async function handleRemovePhoto() {
+    if (!isEdit) return
+    if (confirm('Foto wirklich entfernen?')) {
+      await deletePhoto.mutateAsync(Number(id))
+    }
+  }
+
+  const saving = createPerson.isPending || updatePerson.isPending || uploadPhoto.isPending
+  const existingPhotoUrl = person ? personPhotoUrl(person) : null
 
   return (
     <div className="admin-page">
       <h2>{isEdit ? 'Kontakt bearbeiten' : 'Neuer Kontakt'}</h2>
       <form className="form" onSubmit={handleSubmit}>
+        <label>
+          Foto
+          <div className="photo-picker">
+            {photoPreview ? (
+              <img className="avatar avatar--large" src={photoPreview} alt="" />
+            ) : person ? (
+              <Avatar person={person} size="large" />
+            ) : (
+              <span className="avatar avatar--large">?</span>
+            )}
+            <div className="photo-picker__actions">
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)}
+              />
+              {(existingPhotoUrl || photoFile) && isEdit && (
+                <button type="button" className="link-button" onClick={handleRemovePhoto}>
+                  Foto entfernen
+                </button>
+              )}
+            </div>
+          </div>
+        </label>
         <label>
           Vorname *
           <input

@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { useMemo } from 'react'
 import { usePeople, useDeletePerson } from '../api/people'
 import { useHouses } from '../api/houses'
+import Avatar from '../components/contacts/Avatar'
 
 export default function AdminContactListPage() {
   const { data: people = [], isLoading } = usePeople()
@@ -28,6 +29,7 @@ export default function AdminContactListPage() {
       <table className="admin-table">
         <thead>
           <tr>
+            <th></th>
             <th>Name</th>
             <th>Haus</th>
             <th>Telefon</th>
@@ -38,6 +40,9 @@ export default function AdminContactListPage() {
         <tbody>
           {people.map((p) => (
             <tr key={p.id}>
+              <td>
+                <Avatar person={p} />
+              </td>
               <td>
                 {p.first_name} {p.last_name}
               </td>

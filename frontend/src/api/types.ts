@@ -26,8 +26,16 @@ export interface Person {
   email: string | null
   notes: string | null
   moved_in: string | null
+  photo_filename: string | null
   created_at: string
   updated_at: string
+}
+
+export function personPhotoUrl(
+  person: Pick<Person, 'id' | 'updated_at' | 'photo_filename'>
+): string | null {
+  if (!person.photo_filename) return null
+  return `/api/people/${person.id}/photo?v=${encodeURIComponent(person.updated_at)}`
 }
 
 export interface PersonInput {

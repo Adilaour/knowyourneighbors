@@ -31,8 +31,12 @@ Die App läuft dann unter http://localhost:5173.
 3. Auf **Karte** ein Haus anklicken, um die Bewohner zu sehen. Auf
    **Kontakte** eine Person anklicken und über "Auf Karte zeigen" das Haus
    auf der Karte hervorheben.
-4. Das Karten-Zentrum in [frontend/src/config.ts](frontend/src/config.ts)
-   auf die Koordinaten deines Dorfes anpassen (Platzhalter: Berlin Mitte).
+4. Unter **Einstellungen** das Kartenzentrum auf die Koordinaten deines
+   Dorfes setzen (Platzhalter: Berlin Mitte) und bei Bedarf alle Kontakte
+   als CSV exportieren.
+5. Beim Anlegen/Bearbeiten eines Kontakts kann optional ein Foto (JPEG,
+   PNG oder WebP, max. 5 MB) hochgeladen werden — es wird in Karte,
+   Kontaktliste und Verwaltung als Avatar angezeigt.
 
 ## Deployment mit Docker
 

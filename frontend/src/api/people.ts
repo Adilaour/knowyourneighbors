@@ -40,3 +40,23 @@ export function useDeletePerson() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: PEOPLE_KEY }),
   })
 }
+
+export function useUploadPersonPhoto() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, file }: { id: number; file: File }) => {
+      const formData = new FormData()
+      formData.append('photo', file)
+      return api.upload<Person>(`/people/${id}/photo`, formData)
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: PEOPLE_KEY }),
+  })
+}
+
+export function useDeletePersonPhoto() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => api.delete<Person>(`/people/${id}/photo`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: PEOPLE_KEY }),
+  })
+}

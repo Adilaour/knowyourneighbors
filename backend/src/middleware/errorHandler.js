@@ -6,7 +6,7 @@ export class HttpError extends Error {
 }
 
 export function errorHandler(err, req, res, next) {
-  const status = err.status || 500;
+  const status = err.status || (err.name === 'MulterError' ? 400 : 500);
   if (status === 500) {
     console.error(err);
   }

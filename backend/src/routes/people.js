@@ -1,8 +1,35 @@
 import { Router } from 'express';
-import db from '../db.js';
+import fs from 'node:fs';
+import path from 'node:path';
+import multer from 'multer';
+import db, { photosDir } from '../db.js';
 import { HttpError } from '../middleware/errorHandler.js';
 
 const router = Router();
+
+const ALLOWED_MIME_TYPES = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+};
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (!ALLOWED_MIME_TYPES[file.mimetype]) {
+      cb(new HttpError(400, 'Nur JPEG-, PNG- oder WebP-Bilder sind erlaubt'));
+      return;
+    }
+    cb(null, true);
+  },
+});
+
+function deletePhotoFile(filename) {
+  if (!filename) return;
+  const filePath = path.join(photosDir, filename);
+  fs.rm(filePath, { force: true }, () => {});
+}
 
 function validatePersonBody(body) {
   const { house_id, first_name, last_name, phone, email, notes, moved_in } = body;
@@ -63,9 +90,49 @@ router.put('/:id', (req, res) => {
 });
 
 router.delete('/:id', (req, res) => {
-  const result = db.prepare('DELETE FROM people WHERE id = ?').run(req.params.id);
-  if (result.changes === 0) throw new HttpError(404, 'Person not found');
+  const existing = db.prepare('SELECT photo_filename FROM people WHERE id = ?').get(req.params.id);
+  if (!existing) throw new HttpError(404, 'Person not found');
+  db.prepare('DELETE FROM people WHERE id = ?').run(req.params.id);
+  deletePhotoFile(existing.photo_filename);
   res.status(204).end();
+});
+
+router.get('/:id/photo', (req, res) => {
+  const row = db.prepare('SELECT photo_filename FROM people WHERE id = ?').get(req.params.id);
+  if (!row || !row.photo_filename) throw new HttpError(404, 'No photo');
+  res.sendFile(path.join(photosDir, row.photo_filename), (err) => {
+    if (err) res.status(404).end();
+  });
+});
+
+router.post('/:id/photo', upload.single('photo'), (req, res) => {
+  const existing = db.prepare('SELECT photo_filename FROM people WHERE id = ?').get(req.params.id);
+  if (!existing) throw new HttpError(404, 'Person not found');
+  if (!req.file) throw new HttpError(400, 'photo file is required');
+
+  const ext = ALLOWED_MIME_TYPES[req.file.mimetype];
+  const filename = `${req.params.id}-${Date.now()}${ext}`;
+  fs.writeFileSync(path.join(photosDir, filename), req.file.buffer);
+
+  db.prepare(`UPDATE people SET photo_filename = ?, updated_at = datetime('now') WHERE id = ?`).run(
+    filename,
+    req.params.id
+  );
+  deletePhotoFile(existing.photo_filename);
+
+  const row = db.prepare('SELECT * FROM people WHERE id = ?').get(req.params.id);
+  res.json(row);
+});
+
+router.delete('/:id/photo', (req, res) => {
+  const existing = db.prepare('SELECT photo_filename FROM people WHERE id = ?').get(req.params.id);
+  if (!existing) throw new HttpError(404, 'Person not found');
+  db.prepare(`UPDATE people SET photo_filename = NULL, updated_at = datetime('now') WHERE id = ?`).run(
+    req.params.id
+  );
+  deletePhotoFile(existing.photo_filename);
+  const row = db.prepare('SELECT * FROM people WHERE id = ?').get(req.params.id);
+  res.json(row);
 });
 
 export default router;

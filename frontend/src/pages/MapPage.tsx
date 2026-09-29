@@ -5,6 +5,7 @@ import { useHouses } from '../api/houses'
 import { usePeople } from '../api/people'
 import { useSettings } from '../api/settings'
 import { MAP_CENTER_FALLBACK, MAP_ZOOM_FALLBACK } from '../config'
+import Avatar from '../components/contacts/Avatar'
 
 export default function MapPage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -60,8 +61,11 @@ export default function MapPage() {
             <ul className="resident-list">
               {residents.map((p) => (
                 <li key={p.id} className="resident-card">
-                  <div className="resident-card__name">
-                    {p.first_name} {p.last_name}
+                  <div className="resident-card__header">
+                    <Avatar person={p} />
+                    <div className="resident-card__name">
+                      {p.first_name} {p.last_name}
+                    </div>
                   </div>
                   {p.phone && <div>📞 {p.phone}</div>}
                   {p.email && <div>✉️ {p.email}</div>}
