@@ -1,0 +1,24 @@
+services:
+  app:
+    build: .
+    container_name: knowyourneighbors
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/backend/data
+    environment:
+      - PORT=3000
+      - DB_PATH=/app/backend/data/knowyourneighbors.db
+      - NODE_ENV=production
+    # Falls dein Reverse Proxy (z.B. Traefik) selbst in Docker läuft und ein
+    # gemeinsames Netzwerk nutzt, kannst du statt der ports:-Zeile oben
+    # dieses Service stattdessen an das Proxy-Netzwerk anhängen, z.B.:
+    # networks: [proxy]
+    # labels:
+    #   - "traefik.enable=true"
+    #   - "traefik.http.routers.knowyourneighbors.rule=Host(`knowyourneighbors.lan`)"
+    #   - "traefik.http.services.knowyourneighbors.loadbalancer.server.port=3000"
+# networks:
+#   proxy:
+#     external: true
