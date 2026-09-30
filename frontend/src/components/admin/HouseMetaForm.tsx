@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
 export interface HouseMetaValues {
   name: string
@@ -8,6 +8,7 @@ export interface HouseMetaValues {
 
 interface HouseMetaFormProps {
   title: string
+  // Gilt nur beim Start. Für andere Startwerte die Komponente über `key` neu erzeugen.
   initial?: HouseMetaValues
   submitLabel: string
   saving?: boolean
@@ -28,10 +29,6 @@ export default function HouseMetaForm({
   onDelete,
 }: HouseMetaFormProps) {
   const [values, setValues] = useState<HouseMetaValues>(initial ?? empty)
-
-  useEffect(() => {
-    setValues(initial ?? empty)
-  }, [initial])
 
   return (
     <form

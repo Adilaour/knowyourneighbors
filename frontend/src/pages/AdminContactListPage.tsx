@@ -3,6 +3,21 @@ import { useMemo } from 'react'
 import { usePeople, useDeletePerson } from '../api/people'
 import { useHouses } from '../api/houses'
 import Avatar from '../components/contacts/Avatar'
+import { fullName } from '../lib/people'
+import type { LabeledValue } from '../api/types'
+
+function FieldLines({ items }: { items: LabeledValue[] }) {
+  return (
+    <>
+      {items.map((item) => (
+        <div key={item.id}>
+          {item.value}
+          {item.label && <span className="hint"> ({item.label})</span>}
+        </div>
+      ))}
+    </>
+  )
+}
 
 export default function AdminContactListPage() {
   const { data: people = [], isLoading } = usePeople()
@@ -18,7 +33,7 @@ export default function AdminContactListPage() {
   }
 
   return (
-    <div className="admin-page">
+    <div className="admin-page admin-page--wide">
       <div className="admin-page__header">
         <h2>Kontakte verwalten</h2>
         <Link className="button" to="/admin/contacts/new">
@@ -43,20 +58,24 @@ export default function AdminContactListPage() {
               <td>
                 <Avatar person={p} />
               </td>
-              <td>
-                {p.first_name} {p.last_name}
-              </td>
+              <td>{fullName(p)}</td>
               <td className="muted">{p.house_id ? houseById.get(p.house_id)?.name : '—'}</td>
-              <td className="muted">{p.phone}</td>
-              <td className="muted">{p.email}</td>
-              <td className="admin-table__actions">
-                <Link to={`/admin/contacts/${p.id}/edit`}>Bearbeiten</Link>
-                <button
-                  className="link-button"
-                  onClick={() => handleDelete(p.id, `${p.first_name} ${p.last_name ?? ''}`.trim())}
-                >
-                  Löschen
-                </button>
+              <td className="muted admin-table__nowrap">
+                <FieldLines items={p.phones} />
+              </td>
+              <td className="muted admin-table__nowrap">
+                <FieldLines items={p.emails} />
+              </td>
+              <td>
+                <div className="admin-table__actions">
+                  <Link to={`/admin/contacts/${p.id}/edit`}>Bearbeiten</Link>
+                  <button
+                    className="link-button"
+                    onClick={() => handleDelete(p.id, fullName(p))}
+                  >
+                    Löschen
+                  </button>
+                </div>
               </td>
             </tr>
           ))}

@@ -4,6 +4,7 @@ import path from 'node:path';
 import multer from 'multer';
 import db, { photosDir } from '../db.js';
 import { HttpError } from '../middleware/errorHandler.js';
+import { getPerson, hydratePeople, parsePersonDetails, savePersonDetails } from '../personDetails.js';
 
 const router = Router();
 
@@ -32,7 +33,7 @@ function deletePhotoFile(filename) {
 }
 
 function validatePersonBody(body) {
-  const { house_id, first_name, last_name, phone, email, notes, moved_in } = body;
+  const { house_id, first_name, last_name, notes, moved_in } = body;
   if (typeof first_name !== 'string' || !first_name.trim()) {
     throw new HttpError(400, 'first_name is required');
   }
@@ -47,46 +48,51 @@ function validatePersonBody(body) {
     house_id: houseId,
     first_name: first_name.trim(),
     last_name: last_name ?? null,
-    phone: phone ?? null,
-    email: email ?? null,
     notes: notes ?? null,
     moved_in: moved_in ?? null,
   };
 }
 
 router.get('/', (req, res) => {
-  res.json(db.prepare('SELECT * FROM people ORDER BY first_name, last_name').all());
+  res.json(hydratePeople(db.prepare('SELECT * FROM people ORDER BY first_name, last_name').all()));
 });
 
 router.get('/:id', (req, res) => {
-  const row = db.prepare('SELECT * FROM people WHERE id = ?').get(req.params.id);
-  if (!row) throw new HttpError(404, 'Person not found');
-  res.json(row);
+  const person = getPerson(req.params.id);
+  if (!person) throw new HttpError(404, 'Person not found');
+  res.json(person);
 });
 
 router.post('/', (req, res) => {
   const data = validatePersonBody(req.body);
-  const result = db
-    .prepare(
-      `INSERT INTO people (house_id, first_name, last_name, phone, email, notes, moved_in)
-       VALUES (@house_id, @first_name, @last_name, @phone, @email, @notes, @moved_in)`
-    )
-    .run(data);
-  const row = db.prepare('SELECT * FROM people WHERE id = ?').get(result.lastInsertRowid);
-  res.status(201).json(row);
+  const details = parsePersonDetails(req.body);
+  const id = db.transaction(() => {
+    const result = db
+      .prepare(
+        `INSERT INTO people (house_id, first_name, last_name, notes, moved_in)
+         VALUES (@house_id, @first_name, @last_name, @notes, @moved_in)`
+      )
+      .run(data);
+    savePersonDetails(result.lastInsertRowid, details);
+    return result.lastInsertRowid;
+  })();
+  res.status(201).json(getPerson(id));
 });
 
 router.put('/:id', (req, res) => {
   const existing = db.prepare('SELECT id FROM people WHERE id = ?').get(req.params.id);
   if (!existing) throw new HttpError(404, 'Person not found');
   const data = validatePersonBody(req.body);
-  db.prepare(
-    `UPDATE people SET house_id = @house_id, first_name = @first_name, last_name = @last_name,
-       phone = @phone, email = @email, notes = @notes, moved_in = @moved_in, updated_at = datetime('now')
-     WHERE id = @id`
-  ).run({ ...data, id: req.params.id });
-  const row = db.prepare('SELECT * FROM people WHERE id = ?').get(req.params.id);
-  res.json(row);
+  const details = parsePersonDetails(req.body, existing.id);
+  db.transaction(() => {
+    db.prepare(
+      `UPDATE people SET house_id = @house_id, first_name = @first_name, last_name = @last_name,
+         notes = @notes, moved_in = @moved_in, updated_at = datetime('now')
+       WHERE id = @id`
+    ).run({ ...data, id: existing.id });
+    savePersonDetails(existing.id, details);
+  })();
+  res.json(getPerson(existing.id));
 });
 
 router.delete('/:id', (req, res) => {
@@ -120,8 +126,7 @@ router.post('/:id/photo', upload.single('photo'), (req, res) => {
   );
   deletePhotoFile(existing.photo_filename);
 
-  const row = db.prepare('SELECT * FROM people WHERE id = ?').get(req.params.id);
-  res.json(row);
+  res.json(getPerson(req.params.id));
 });
 
 router.delete('/:id/photo', (req, res) => {
@@ -131,8 +136,7 @@ router.delete('/:id/photo', (req, res) => {
     req.params.id
   );
   deletePhotoFile(existing.photo_filename);
-  const row = db.prepare('SELECT * FROM people WHERE id = ?').get(req.params.id);
-  res.json(row);
+  res.json(getPerson(req.params.id));
 });
 
 export default router;

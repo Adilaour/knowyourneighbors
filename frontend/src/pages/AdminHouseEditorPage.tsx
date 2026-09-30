@@ -10,6 +10,7 @@ import { usePeople, useUpdatePerson } from '../api/people'
 import { useSettings } from '../api/settings'
 import { MAP_CENTER_FALLBACK, MAP_ZOOM_FALLBACK } from '../config'
 import type { House, LatLng } from '../api/types'
+import { personScalarsToInput } from '../lib/people'
 
 export default function AdminHouseEditorPage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -122,6 +123,7 @@ export default function AdminHouseEditorPage() {
         {!pendingPolygon && selectedHouse && (
           <>
             <HouseMetaForm
+              key={`${selectedHouse.id}:${selectedHouse.updated_at}`}
               title={selectedHouse.name}
               initial={{
                 name: selectedHouse.name,
@@ -140,12 +142,12 @@ export default function AdminHouseEditorPage() {
               onAssign={(personId) => {
                 const person = people.find((p) => p.id === personId)
                 if (!person) return
-                updatePerson.mutate({ id: personId, input: { ...person, house_id: selectedHouse.id } })
+                updatePerson.mutate({ id: personId, input: { ...personScalarsToInput(person), house_id: selectedHouse.id } })
               }}
               onUnassign={(personId) => {
                 const person = people.find((p) => p.id === personId)
                 if (!person) return
-                updatePerson.mutate({ id: personId, input: { ...person, house_id: null } })
+                updatePerson.mutate({ id: personId, input: { ...personScalarsToInput(person), house_id: null } })
               }}
             />
           </>

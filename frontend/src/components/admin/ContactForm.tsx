@@ -7,60 +7,102 @@ import {
   useUploadPersonPhoto,
   useDeletePersonPhoto,
 } from '../../api/people'
+import { usePeople } from '../../api/people'
 import { useHouses } from '../../api/houses'
 import { personPhotoUrl } from '../../api/types'
-import type { PersonInput } from '../../api/types'
+import type { LabeledValueInput, Person, PersonInput, RelationshipInput } from '../../api/types'
+import { homeAddress, personToInput } from '../../lib/people'
 import Avatar from '../contacts/Avatar'
+import LabeledValueListEditor from './LabeledValueListEditor'
+import RelationshipEditor from './RelationshipEditor'
 
 const emptyForm: PersonInput = {
   house_id: null,
   first_name: '',
   last_name: '',
-  phone: '',
-  email: '',
   notes: '',
   moved_in: '',
+}
+
+const PHONE_LABELS = ['Mobil', 'Privat', 'Arbeit']
+const EMAIL_LABELS = ['Privat', 'Arbeit']
+const ADDRESS_LABELS = ['Arbeit', 'Ferienwohnung', 'Sonstiges']
+
+function initialValues(person: Person | undefined) {
+  const input = person ? personToInput(person) : null
+  return {
+    form: input
+      ? {
+          house_id: input.house_id,
+          first_name: input.first_name,
+          last_name: input.last_name ?? '',
+          notes: input.notes ?? '',
+          moved_in: input.moved_in ?? '',
+        }
+      : emptyForm,
+    phones: input?.phones ?? [],
+    emails: input?.emails ?? [],
+    addresses: input?.addresses ?? [],
+    relationships: input?.relationships ?? [],
+  }
 }
 
 export default function ContactForm() {
   const { id } = useParams()
   const isEdit = Boolean(id)
+  // Das Formular übernimmt die Daten nur beim Start, und beim Speichern ersetzt es
+  // die Beziehungen komplett. Deshalb erst nach einem frischen Laden anzeigen,
+  // nicht schon mit veralteten Daten aus dem Cache.
+  const { data: person, isFetchedAfterMount } = usePerson(isEdit ? Number(id) : undefined)
+
+  if (isEdit && !isFetchedAfterMount) {
+    return (
+      <div className="admin-page">
+        <p className="hint">Lädt…</p>
+      </div>
+    )
+  }
+  if (isEdit && !person) {
+    return (
+      <div className="admin-page">
+        <p className="overlay-message overlay-message--error" style={{ position: 'static' }}>
+          Kontakt nicht gefunden.
+        </p>
+      </div>
+    )
+  }
+  return <ContactFormBody key={person?.id ?? 'new'} person={person} />
+}
+
+function ContactFormBody({ person }: { person: Person | undefined }) {
+  const isEdit = person !== undefined
   const navigate = useNavigate()
 
-  const { data: person } = usePerson(isEdit ? Number(id) : undefined)
   const { data: houses = [] } = useHouses()
+  const { data: people = [] } = usePeople()
   const createPerson = useCreatePerson()
   const updatePerson = useUpdatePerson()
   const uploadPhoto = useUploadPersonPhoto()
   const deletePhoto = useDeletePersonPhoto()
 
-  const [form, setForm] = useState<PersonInput>(emptyForm)
-  const [photoFile, setPhotoFile] = useState<File | null>(null)
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null)
+  const [initial] = useState(() => initialValues(person))
+  const [form, setForm] = useState<PersonInput>(initial.form)
+  const [phones, setPhones] = useState<LabeledValueInput[]>(initial.phones)
+  const [emails, setEmails] = useState<LabeledValueInput[]>(initial.emails)
+  const [addresses, setAddresses] = useState<LabeledValueInput[]>(initial.addresses)
+  const [relationships, setRelationships] = useState<RelationshipInput[]>(initial.relationships)
+  const [error, setError] = useState<string | null>(null)
+  const [photo, setPhoto] = useState<{ file: File; previewUrl: string } | null>(null)
 
+  // Gibt die Vorschau-URL frei, sobald sie ersetzt wird oder das Formular verschwindet.
   useEffect(() => {
-    if (person) {
-      setForm({
-        house_id: person.house_id,
-        first_name: person.first_name,
-        last_name: person.last_name ?? '',
-        phone: person.phone ?? '',
-        email: person.email ?? '',
-        notes: person.notes ?? '',
-        moved_in: person.moved_in ?? '',
-      })
-    }
-  }, [person])
+    if (!photo) return
+    return () => URL.revokeObjectURL(photo.previewUrl)
+  }, [photo])
 
-  useEffect(() => {
-    if (!photoFile) {
-      setPhotoPreview(null)
-      return
-    }
-    const url = URL.createObjectURL(photoFile)
-    setPhotoPreview(url)
-    return () => URL.revokeObjectURL(url)
-  }, [photoFile])
+  function handlePhotoChange(file: File | null) {
+    setPhoto(file ? { file, previewUrl: URL.createObjectURL(file) } : null)
+  }
 
   function handleChange<K extends keyof PersonInput>(key: K, value: PersonInput[K]) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -68,29 +110,37 @@ export default function ContactForm() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    let personId: number
-    if (isEdit) {
-      personId = Number(id)
-      await updatePerson.mutateAsync({ id: personId, input: form })
-    } else {
-      const created = await createPerson.mutateAsync(form)
-      personId = created.id
+    setError(null)
+    const input: PersonInput = { ...form, phones, emails, addresses, relationships }
+    try {
+      let personId: number
+      if (person) {
+        personId = person.id
+        await updatePerson.mutateAsync({ id: personId, input })
+      } else {
+        const created = await createPerson.mutateAsync(input)
+        personId = created.id
+      }
+      if (photo) {
+        await uploadPhoto.mutateAsync({ id: personId, file: photo.file })
+      }
+      navigate('/admin/contacts')
+    } catch (err) {
+      setError((err as Error).message)
     }
-    if (photoFile) {
-      await uploadPhoto.mutateAsync({ id: personId, file: photoFile })
-    }
-    navigate('/admin/contacts')
   }
 
   async function handleRemovePhoto() {
-    if (!isEdit) return
+    if (!person) return
     if (confirm('Foto wirklich entfernen?')) {
-      await deletePhoto.mutateAsync(Number(id))
+      await deletePhoto.mutateAsync(person.id)
     }
   }
 
   const saving = createPerson.isPending || updatePerson.isPending || uploadPhoto.isPending
   const existingPhotoUrl = person ? personPhotoUrl(person) : null
+  const selectedHouse = houses.find((h) => h.id === form.house_id) ?? null
+  const houseAddress = homeAddress(selectedHouse)
 
   return (
     <div className="admin-page">
@@ -99,8 +149,8 @@ export default function ContactForm() {
         <label>
           Foto
           <div className="photo-picker">
-            {photoPreview ? (
-              <img className="avatar avatar--large" src={photoPreview} alt="" />
+            {photo ? (
+              <img className="avatar avatar--large" src={photo.previewUrl} alt="" />
             ) : person ? (
               <Avatar person={person} size="large" />
             ) : (
@@ -110,9 +160,9 @@ export default function ContactForm() {
               <input
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
-                onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)}
+                onChange={(e) => handlePhotoChange(e.target.files?.[0] ?? null)}
               />
-              {(existingPhotoUrl || photoFile) && isEdit && (
+              {(existingPhotoUrl || photo) && isEdit && (
                 <button type="button" className="link-button" onClick={handleRemovePhoto}>
                   Foto entfernen
                 </button>
@@ -132,18 +182,22 @@ export default function ContactForm() {
           Nachname
           <input value={form.last_name ?? ''} onChange={(e) => handleChange('last_name', e.target.value)} />
         </label>
-        <label>
-          Telefon
-          <input value={form.phone ?? ''} onChange={(e) => handleChange('phone', e.target.value)} />
-        </label>
-        <label>
-          E-Mail
-          <input
-            type="email"
-            value={form.email ?? ''}
-            onChange={(e) => handleChange('email', e.target.value)}
-          />
-        </label>
+        <LabeledValueListEditor
+          legend="Telefon"
+          addLabel="Telefonnummer"
+          items={phones}
+          onChange={setPhones}
+          labelSuggestions={PHONE_LABELS}
+          valueType="tel"
+        />
+        <LabeledValueListEditor
+          legend="E-Mail"
+          addLabel="E-Mail-Adresse"
+          items={emails}
+          onChange={setEmails}
+          labelSuggestions={EMAIL_LABELS}
+          valueType="email"
+        />
         <label>
           Haus
           <select
@@ -158,6 +212,28 @@ export default function ContactForm() {
             ))}
           </select>
         </label>
+        <LabeledValueListEditor
+          legend="Adressen"
+          addLabel="Adresse"
+          items={addresses}
+          onChange={setAddresses}
+          labelSuggestions={selectedHouse ? ADDRESS_LABELS : ['Zuhause', ...ADDRESS_LABELS]}
+          valuePlaceholder="Straße, PLZ Ort"
+        >
+          <p className="hint field-list__note">
+            {selectedHouse
+              ? houseAddress
+                ? `🏠 Zuhause: ${houseAddress} (Adresse des Hauses „${selectedHouse.name}“)`
+                : `🏠 Das Haus „${selectedHouse.name}“ hat noch keine Adresse. Sie wird als Zuhause-Adresse übernommen, sobald sie im Haus-Editor eingetragen ist.`
+              : 'Ohne Haus gibt es keine Zuhause-Adresse. Bei Bedarf hier eine Adresse mit der Bezeichnung „Zuhause“ eintragen.'}
+          </p>
+        </LabeledValueListEditor>
+        <RelationshipEditor
+          selfId={person?.id}
+          value={relationships}
+          onChange={setRelationships}
+          people={people}
+        />
         <label>
           Seit wann
           <input
@@ -170,6 +246,11 @@ export default function ContactForm() {
           Notizen
           <textarea value={form.notes ?? ''} onChange={(e) => handleChange('notes', e.target.value)} />
         </label>
+        {error && (
+          <p className="overlay-message overlay-message--error" style={{ position: 'static' }}>
+            {error}
+          </p>
+        )}
         <div className="form__actions">
           <button type="submit" disabled={saving}>
             {saving ? 'Speichert…' : 'Speichern'}
